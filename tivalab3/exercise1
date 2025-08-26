@@ -1,0 +1,57 @@
+#include <stdint.h>
+#include <stdbool.h>
+#include "inc/hw_memmap.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/gpio.h"
+
+#define LED1 GPIO_PIN_0  // PN0
+#define LED2 GPIO_PIN_1  // PN1
+#define LED3 GPIO_PIN_0  // PF0
+#define LED4 GPIO_PIN_4  // PF4
+
+int main(void) {
+    uint32_t sysclk;
+    int index = 0;  // posición en la secuencia
+    const uint32_t ports[] = { GPIO_PORTN_BASE, GPIO_PORTN_BASE, GPIO_PORTF_BASE, GPIO_PORTF_BASE };
+    const uint8_t  pins[]  = { LED1, LED2, LED3, LED4 };
+
+    // Configuración del reloj
+    sysclk = SysCtlClockFreqSet(SYSCTL_XTAL_25MHZ | SYSCTL_OSC_MAIN |
+                                SYSCTL_USE_PLL | SYSCTL_CFG_VCO_320, 120000000);
+
+    // Habilitar periféricos
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPION);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOJ);
+
+    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPION));
+    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOF));
+    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOJ));
+
+    // Configurar LEDs como salida
+    GPIOPinTypeGPIOOutput(GPIO_PORTN_BASE, LED1 | LED2);
+    GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, LED3 | LED4);
+
+    // Configurar switches como entrada con pull-up
+    GPIOPinTypeGPIOInput(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    GPIOPadConfigSet(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1,
+                     GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+
+    while (1) {
+        bool sw1 = (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_0) == 0);
+        bool sw2 = (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_1) == 0);
+
+        if (sw1) {  // Ascendente
+            GPIOPinWrite(ports[index], pins[index], 0);  // Apagar LED actual
+            index = (index + 1) % 4;  // siguiente
+            GPIOPinWrite(ports[index], pins[index], pins[index]); // Encender LED
+            SysCtlDelay(sysclk/6);  // retardo simple
+        }
+        if (sw2) {  // Descendente
+            GPIOPinWrite(ports[index], pins[index], 0);
+            index = (index - 1 + 4) % 4;
+            GPIOPinWrite(ports[index], pins[index], pins[index]);
+            SysCtlDelay(sysclk/6);
+        }
+    }
+}
